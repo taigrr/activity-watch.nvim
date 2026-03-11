@@ -1,0 +1,79 @@
+*activity-watch.txt*    ActivityWatch integration for Neovim
+
+==============================================================================
+CONTENTS                                            *activity-watch-contents*
+
+1. Introduction ............................ |activity-watch-introduction|
+2. Requirements ............................ |activity-watch-requirements|
+3. Configuration ........................... |activity-watch-configuration|
+4. Commands ................................ |activity-watch-commands|
+5. API ..................................... |activity-watch-api|
+
+==============================================================================
+1. INTRODUCTION                                  *activity-watch-introduction*
+
+activity-watch.nvim integrates Neovim with ActivityWatch time tracker.
+Automatically tracks:
+
+- Edited files
+- Current project (via git root or cwd)
+- Git branch
+- File language/type
+
+==============================================================================
+2. REQUIREMENTS                                  *activity-watch-requirements*
+
+- Neovim >= 0.9.0
+- curl (for HTTP requests)
+- ActivityWatch running locally
+
+==============================================================================
+3. CONFIGURATION                                *activity-watch-configuration*
+
+Call setup() with your options: >lua
+
+  require("activity_watch").setup({
+    bucket = {
+      hostname = nil, -- default: system hostname
+      name = nil,     -- default: "aw-watcher-neovim_" .. hostname
+    },
+    server = {
+      host = "127.0.0.1",
+      port = 5600,
+      ssl = false,
+      pulsetime = 30,
+    },
+  })
+<
+
+==============================================================================
+4. COMMANDS                                          *activity-watch-commands*
+
+:AWStart                                                            *:AWStart*
+  Connect or reconnect to the ActivityWatch server.
+
+:AWStatus                                                          *:AWStatus*
+  Show current connection status.
+
+:AWHeartbeat                                                    *:AWHeartbeat*
+  Send a manual heartbeat to the server.
+
+==============================================================================
+5. API                                                    *activity-watch-api*
+
+require("activity_watch").setup({opts})                  *activity_watch.setup*
+  Initialize the plugin with configuration.
+
+require("activity_watch").heartbeat()                *activity_watch.heartbeat*
+  Send a heartbeat event.
+
+require("activity_watch").start()                        *activity_watch.start*
+  Create bucket and connect to server.
+
+require("activity_watch").is_connected()          *activity_watch.is_connected*
+  Returns true if connected to server.
+
+require("activity_watch").status()                      *activity_watch.status*
+  Returns status string: "connected", "disconnected", or "not initialized".
+
+vim:tw=78:ts=8:ft=help:norl:
