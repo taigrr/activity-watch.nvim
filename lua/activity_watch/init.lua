@@ -50,6 +50,9 @@ M._project = nil
 ---@type number
 M._last_heartbeat = 0
 
+---@type boolean
+M._enabled = true
+
 local HEARTBEAT_INTERVAL_MS = 8000
 
 ---@private
@@ -69,11 +72,37 @@ local function find_git_root()
 end
 
 ---@private
----Update cached branch name
+---Update cached branch name (async)
 local function update_branch()
-  local result = vim.fn.system("git rev-parse --abbrev-ref HEAD 2>/dev/null")
-  local branch = result:gsub("%s+$", "")
-  M._branch = (branch ~= "" and not branch:match("^fatal")) and branch or nil
+  local stdout = vim.uv.new_pipe()
+  local handle, err = vim.uv.spawn("git", {
+    args = { "rev-parse", "--abbrev-ref", "HEAD" },
+    stdio = { nil, stdout, nil },
+  }, function(code)
+    if stdout and not stdout:is_closing() then
+      stdout:close()
+    end
+  end)
+
+  if not handle then
+    M._branch = nil
+    if stdout and not stdout:is_closing() then
+      stdout:close()
+    end
+    return
+  end
+
+  local output = ""
+  stdout:read_start(function(read_err, chunk)
+    if chunk then
+      output = output .. chunk
+    else
+      local branch = output:gsub("%s+$", "")
+      vim.schedule(function()
+        M._branch = (branch ~= "" and not branch:match("^fatal")) and branch or nil
+      end)
+    end
+  end)
 end
 
 ---@private
@@ -86,7 +115,7 @@ end
 
 ---Send a heartbeat to the ActivityWatch server.
 function M.heartbeat()
-  if not M._client then
+  if not M._client or not M._enabled then
     return
   end
 
@@ -111,8 +140,17 @@ function M.start()
     vim.notify("[activity-watch] Not initialized. Call setup() first.", vim.log.levels.WARN)
     return
   end
+  M._enabled = true
   local client = require("activity_watch.client")
   client.create_bucket(M._client)
+end
+
+---Stop tracking activity. Pauses heartbeats until :AWStart.
+function M.stop()
+  M._enabled = false
+  if M._client then
+    M._client.connected = false
+  end
 end
 
 ---Check connection status.
@@ -126,6 +164,9 @@ end
 function M.status()
   if not M._client then
     return "not initialized"
+  end
+  if not M._enabled then
+    return "paused"
   end
   return M._client.connected and "connected" or "disconnected"
 end
@@ -175,6 +216,13 @@ local function create_commands()
     vim.notify("[activity-watch] " .. M.status(), vim.log.levels.INFO)
   end, {
     desc = "Show ActivityWatch connection status",
+  })
+
+  vim.api.nvim_create_user_command("AWStop", function()
+    M.stop()
+    vim.notify("[activity-watch] Tracking paused. Use :AWStart to resume.", vim.log.levels.INFO)
+  end, {
+    desc = "Pause ActivityWatch tracking",
   })
 
   vim.api.nvim_create_user_command("AWHeartbeat", M.heartbeat, {

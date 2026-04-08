@@ -8,6 +8,9 @@ local M = {}
 ---@private
 local ERR_NOTIFY_INTERVAL_MS = 60000
 
+---@private
+local CURL_TIMEOUT_SECONDS = 5
+
 ---@class AWClient
 ---@field hostname string
 ---@field bucket_name string
@@ -63,33 +66,39 @@ local function post(client, url, data)
     "/dev/null",
     "-w",
     "%{http_code}",
+    "--connect-timeout",
+    tostring(CURL_TIMEOUT_SECONDS),
+    "--max-time",
+    tostring(CURL_TIMEOUT_SECONDS * 2),
   }
 
-  local handle
   local stdout = vim.uv.new_pipe()
 
-  handle = vim.uv.spawn("curl", {
+  local handle, err = vim.uv.spawn("curl", {
     args = args,
     stdio = { nil, stdout, nil },
   }, function(code)
     client.connected = code == 0
 
-    if stdout then
+    if stdout and not stdout:is_closing() then
       stdout:close()
-    end
-    if handle and not handle:is_closing() then
-      handle:close()
     end
   end)
 
-  if stdout then
-    stdout:read_start(function(err, chunk)
-      if not err and chunk then
-        local status = tonumber(chunk:match("%d+"))
-        client.connected = status and status >= 200 and status < 300
-      end
-    end)
+  if not handle then
+    client.connected = false
+    if stdout and not stdout:is_closing() then
+      stdout:close()
+    end
+    return
   end
+
+  stdout:read_start(function(read_err, chunk)
+    if not read_err and chunk then
+      local status = tonumber(chunk:match("%d+"))
+      client.connected = status and status >= 200 and status < 300
+    end
+  end)
 end
 
 ---Create the bucket on the ActivityWatch server.

@@ -61,6 +61,7 @@ require("activity_watch").setup({
 | Command | Description |
 |---------|-------------|
 | `:AWStart` | Connect/reconnect to ActivityWatch server |
+| `:AWStop` | Pause tracking (resume with `:AWStart`) |
 | `:AWStatus` | Show connection status |
 | `:AWHeartbeat` | Send manual heartbeat |
 

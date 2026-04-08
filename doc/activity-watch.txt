@@ -52,6 +52,9 @@ Call setup() with your options: >lua
 :AWStart                                                            *:AWStart*
   Connect or reconnect to the ActivityWatch server.
 
+:AWStop                                                              *:AWStop*
+  Pause ActivityWatch tracking. Heartbeats are suppressed until :AWStart.
+
 :AWStatus                                                          *:AWStatus*
   Show current connection status.
 
@@ -73,7 +76,11 @@ require("activity_watch").start()                        *activity_watch.start*
 require("activity_watch").is_connected()          *activity_watch.is_connected*
   Returns true if connected to server.
 
+require("activity_watch").stop()                          *activity_watch.stop*
+  Pause tracking. Heartbeats are suppressed until start() is called.
+
 require("activity_watch").status()                      *activity_watch.status*
-  Returns status string: "connected", "disconnected", or "not initialized".
+  Returns status string: "connected", "disconnected", "paused", or
+  "not initialized".
 
 vim:tw=78:ts=8:ft=help:norl:
