@@ -41,6 +41,11 @@ function M.check()
     return
   end
 
+  -- Check if paused
+  if not aw._enabled then
+    vim.health.info("Tracking is paused. Run :AWStart to resume.")
+  end
+
   -- Check connection
   if aw._client.connected then
     vim.health.ok("Connected to ActivityWatch server")

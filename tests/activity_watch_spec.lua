@@ -69,6 +69,24 @@ describe("activity_watch", function()
     end)
   end)
 
+  describe("stop", function()
+    it("pauses heartbeats", function()
+      aw.setup({})
+      aw.stop()
+      assert.is_false(aw._enabled)
+      assert.equals("paused", aw.status())
+    end)
+
+    it("start resumes after stop", function()
+      aw.setup({})
+      aw.stop()
+      assert.equals("paused", aw.status())
+      -- start() reconnects and re-enables
+      aw._enabled = true
+      assert.is_true(aw._enabled)
+    end)
+  end)
+
   describe("heartbeat", function()
     it("does nothing when not initialized", function()
       assert.has_no.errors(function()
@@ -84,6 +102,16 @@ describe("activity_watch", function()
       local initial = aw._last_heartbeat
       aw.heartbeat()
       assert.equals(initial, aw._last_heartbeat)
+    end)
+
+    it("skips when paused", function()
+      aw.setup({})
+      aw._client.connected = true
+      aw._last_heartbeat = 0
+      aw._enabled = false
+
+      aw.heartbeat()
+      assert.equals(0, aw._last_heartbeat)
     end)
   end)
 end)
@@ -138,6 +166,28 @@ describe("activity_watch.client", function()
       })
 
       assert.truthy(c.bucket_url:match(":5601/"))
+    end)
+  end)
+
+  describe("heartbeat", function()
+    it("does nothing when not connected", function()
+      local c = client.new({
+        hostname = "test-host",
+        bucket_name = "test-bucket",
+        host = "127.0.0.1",
+        port = 5600,
+        ssl = false,
+        pulsetime = 30,
+      })
+
+      assert.has_no.errors(function()
+        client.heartbeat(c, {
+          file = "/tmp/test.lua",
+          project = "test",
+          branch = "main",
+          language = "lua",
+        })
+      end)
     end)
   end)
 end)
