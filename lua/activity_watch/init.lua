@@ -63,20 +63,36 @@ local function find_git_root()
   if path == "" then
     return nil
   end
-  for dir in vim.fs.parents(path) do
-    if vim.fn.isdirectory(dir .. "/.git") == 1 then
-      return dir
-    end
+
+  local git_dir = vim.fs.find(".git", {
+    path = vim.fs.dirname(path),
+    upward = true,
+    type = "file",
+  })[1]
+  if git_dir then
+    return vim.fs.dirname(git_dir)
   end
+
+  git_dir = vim.fs.find(".git", {
+    path = vim.fs.dirname(path),
+    upward = true,
+    type = "directory",
+  })[1]
+  if git_dir then
+    return vim.fs.dirname(git_dir)
+  end
+
   return nil
 end
 
 ---@private
 ---Update cached branch name (async)
-local function update_branch()
+---@param git_root string?
+local function update_branch(git_root)
   local stdout = vim.uv.new_pipe()
   local handle, err = vim.uv.spawn("git", {
     args = { "rev-parse", "--abbrev-ref", "HEAD" },
+    cwd = git_root,
     stdio = { nil, stdout, nil },
   }, function(code)
     if stdout and not stdout:is_closing() then
@@ -107,10 +123,17 @@ end
 
 ---@private
 ---Update cached project name
-local function update_project()
-  local git_root = find_git_root()
+---@param git_root string?
+local function update_project(git_root)
   local project_dir = git_root or vim.fn.getcwd()
   M._project = vim.fs.basename(vim.fs.normalize(project_dir))
+end
+
+---@private
+local function update_context()
+  local git_root = find_git_root()
+  update_branch(git_root)
+  update_project(git_root)
 end
 
 ---Send a heartbeat to the ActivityWatch server.
@@ -194,8 +217,7 @@ local function create_autocommands()
   vim.api.nvim_create_autocmd({ "BufEnter", "FocusGained", "FileType" }, {
     group = group,
     callback = function()
-      update_branch()
-      update_project()
+      update_context()
     end,
   })
 
@@ -251,8 +273,7 @@ function M.setup(opts)
   })
 
   -- Initial git info
-  update_branch()
-  update_project()
+  update_context()
 
   -- Create bucket
   client.create_bucket(M._client)
