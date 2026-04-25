@@ -100,6 +100,66 @@ describe("activity_watch", function()
     end)
   end)
 
+  describe("git context", function()
+    it("runs branch detection from the current buffer git root", function()
+      local client = require("activity_watch.client")
+      local original_create_bucket = client.create_bucket
+      local original_spawn = vim.uv.spawn
+      local original_new_pipe = vim.uv.new_pipe
+      local temp_root = vim.fn.tempname()
+      local repo_root = temp_root .. "/worktree-repo"
+      local file_path = repo_root .. "/lua/example.lua"
+      local spawn_cwds = {}
+
+      vim.fn.mkdir(repo_root .. "/lua", "p")
+      vim.fn.writefile({ "gitdir: /tmp/fake-worktree" }, repo_root .. "/.git")
+      vim.fn.writefile({ "print('hi')" }, file_path)
+      vim.cmd.edit(file_path)
+
+      client.create_bucket = function(_) end
+      vim.uv.new_pipe = function()
+        return {
+          read_start = function(_, cb)
+            cb(nil, "feature/test\n")
+            cb(nil, nil)
+          end,
+          is_closing = function()
+            return false
+          end,
+          close = function() end,
+        }
+      end
+      vim.uv.spawn = function(cmd, opts, on_exit)
+        if cmd == "git" then
+          table.insert(spawn_cwds, opts.cwd)
+          if on_exit then
+            on_exit(0)
+          end
+          return {
+            is_closing = function()
+              return false
+            end,
+            close = function() end,
+          }
+        end
+        return original_spawn(cmd, opts, on_exit)
+      end
+
+      aw.setup({})
+      vim.wait(100, function()
+        return aw._branch == "feature/test"
+      end)
+
+      assert.are.same({ repo_root }, spawn_cwds)
+      assert.equals("worktree-repo", aw._project)
+      assert.equals("feature/test", aw._branch)
+
+      vim.uv.spawn = original_spawn
+      vim.uv.new_pipe = original_new_pipe
+      client.create_bucket = original_create_bucket
+    end)
+  end)
+
   describe("heartbeat", function()
     it("does nothing when not initialized", function()
       assert.has_no.errors(function()
