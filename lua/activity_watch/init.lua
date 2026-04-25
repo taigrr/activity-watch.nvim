@@ -207,25 +207,31 @@ local function create_autocommands()
 end
 
 ---@private
+local function recreate_user_command(name, command, opts)
+  pcall(vim.api.nvim_del_user_command, name)
+  vim.api.nvim_create_user_command(name, command, opts)
+end
+
+---@private
 local function create_commands()
-  vim.api.nvim_create_user_command("AWStart", M.start, {
+  recreate_user_command("AWStart", M.start, {
     desc = "Connect to ActivityWatch server",
   })
 
-  vim.api.nvim_create_user_command("AWStatus", function()
+  recreate_user_command("AWStatus", function()
     vim.notify("[activity-watch] " .. M.status(), vim.log.levels.INFO)
   end, {
     desc = "Show ActivityWatch connection status",
   })
 
-  vim.api.nvim_create_user_command("AWStop", function()
+  recreate_user_command("AWStop", function()
     M.stop()
     vim.notify("[activity-watch] Tracking paused. Use :AWStart to resume.", vim.log.levels.INFO)
   end, {
     desc = "Pause ActivityWatch tracking",
   })
 
-  vim.api.nvim_create_user_command("AWHeartbeat", M.heartbeat, {
+  recreate_user_command("AWHeartbeat", M.heartbeat, {
     desc = "Send manual heartbeat to ActivityWatch",
   })
 end

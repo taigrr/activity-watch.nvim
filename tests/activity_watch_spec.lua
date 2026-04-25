@@ -45,6 +45,19 @@ describe("activity_watch", function()
       assert.is_not_nil(aw._client)
       assert.equals("custom-bucket", aw._client.bucket_name)
     end)
+
+    it("allows setup to be called more than once", function()
+      assert.has_no.errors(function()
+        aw.setup({})
+        aw.setup({
+          server = {
+            port = 5601,
+          },
+        })
+      end)
+
+      assert.equals(5601, aw.config.server.port)
+    end)
   end)
 
   describe("status", function()
