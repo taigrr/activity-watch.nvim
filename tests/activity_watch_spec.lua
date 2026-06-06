@@ -158,6 +158,36 @@ describe("activity_watch", function()
       vim.uv.new_pipe = original_new_pipe
       client.create_bucket = original_create_bucket
     end)
+
+    it("clears branch when the current buffer is outside git", function()
+      local client = require("activity_watch.client")
+      local original_create_bucket = client.create_bucket
+      local original_spawn = vim.uv.spawn
+      local temp_root = vim.fn.tempname()
+      local file_path = temp_root .. "/notes/example.lua"
+      local spawn_calls = 0
+
+      vim.fn.mkdir(temp_root .. "/notes", "p")
+      vim.fn.writefile({ "print('hi')" }, file_path)
+      vim.cmd.edit(file_path)
+
+      client.create_bucket = function(_) end
+      vim.uv.spawn = function(cmd, opts, on_exit)
+        if cmd == "git" then
+          spawn_calls = spawn_calls + 1
+        end
+        return original_spawn(cmd, opts, on_exit)
+      end
+
+      aw.setup({})
+
+      assert.equals(vim.fs.basename(vim.fn.getcwd()), aw._project)
+      assert.is_nil(aw._branch)
+      assert.equals(0, spawn_calls)
+
+      vim.uv.spawn = original_spawn
+      client.create_bucket = original_create_bucket
+    end)
   end)
 
   describe("heartbeat", function()
