@@ -89,6 +89,11 @@ end
 ---Update cached branch name (async)
 ---@param git_root string?
 local function update_branch(git_root)
+  if not git_root then
+    M._branch = nil
+    return
+  end
+
   local stdout = vim.uv.new_pipe()
   local handle, err = vim.uv.spawn("git", {
     args = { "rev-parse", "--abbrev-ref", "HEAD" },
