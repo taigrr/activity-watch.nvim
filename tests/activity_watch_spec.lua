@@ -272,6 +272,83 @@ describe("activity_watch.client", function()
     end)
   end)
 
+  describe("create_bucket", function()
+    local function new_client()
+      return client.new({
+        hostname = "test-host",
+        bucket_name = "test-bucket",
+        host = "127.0.0.1",
+        port = 5600,
+        ssl = false,
+        pulsetime = 30,
+      })
+    end
+
+    local function stub_curl(status)
+      local original_new_pipe = vim.uv.new_pipe
+      local original_spawn = vim.uv.spawn
+
+      vim.uv.new_pipe = function()
+        return {
+          read_start = function(_, cb)
+            cb(nil, tostring(status))
+          end,
+          is_closing = function()
+            return false
+          end,
+          close = function() end,
+        }
+      end
+
+      vim.uv.spawn = function(cmd, opts, on_exit)
+        if cmd == "curl" then
+          vim.schedule(function()
+            on_exit(0)
+          end)
+          return {
+            is_closing = function()
+              return false
+            end,
+            close = function() end,
+          }
+        end
+        return original_spawn(cmd, opts, on_exit)
+      end
+
+      return function()
+        vim.uv.new_pipe = original_new_pipe
+        vim.uv.spawn = original_spawn
+      end
+    end
+
+    it("marks client connected for successful HTTP responses", function()
+      local c = new_client()
+      local restore = stub_curl(201)
+
+      client.create_bucket(c)
+      vim.wait(100, function()
+        return c.connected
+      end)
+
+      assert.is_true(c.connected)
+      restore()
+    end)
+
+    it("keeps client disconnected for failed HTTP responses", function()
+      local c = new_client()
+      c.connected = true
+      local restore = stub_curl(500)
+
+      client.create_bucket(c)
+      vim.wait(100, function()
+        return not c.connected
+      end)
+
+      assert.is_false(c.connected)
+      restore()
+    end)
+  end)
+
   describe("heartbeat", function()
     it("does nothing when not connected", function()
       local c = client.new({
