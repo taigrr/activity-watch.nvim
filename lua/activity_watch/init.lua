@@ -267,6 +267,7 @@ end
 ---@param opts? AWConfig
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
+  M._enabled = true
 
   -- Resolve hostname
   local hostname = M.config.bucket.hostname or vim.uv.os_gethostname()

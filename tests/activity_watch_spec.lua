@@ -58,6 +58,16 @@ describe("activity_watch", function()
 
       assert.equals(5601, aw.config.server.port)
     end)
+
+    it("resumes tracking when setup is called after stop", function()
+      aw.setup({})
+      aw.stop()
+
+      aw.setup({})
+
+      assert.is_true(aw._enabled)
+      assert.equals("disconnected", aw.status())
+    end)
   end)
 
   describe("status", function()
