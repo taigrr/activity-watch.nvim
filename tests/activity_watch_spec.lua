@@ -297,13 +297,71 @@ end)
 
 describe("activity_watch.health", function()
   local health
+  local health_messages
+
+  local function stub_health()
+    health_messages = {}
+    vim.health = {
+      start = function(message)
+        table.insert(health_messages, { level = "start", message = message })
+      end,
+      ok = function(message)
+        table.insert(health_messages, { level = "ok", message = message })
+      end,
+      warn = function(message, advice)
+        table.insert(health_messages, { level = "warn", message = message, advice = advice })
+      end,
+      error = function(message, advice)
+        table.insert(health_messages, { level = "error", message = message, advice = advice })
+      end,
+      info = function(message)
+        table.insert(health_messages, { level = "info", message = message })
+      end,
+    }
+  end
+
+  local function has_message(level, message)
+    for _, entry in ipairs(health_messages) do
+      if entry.level == level and entry.message == message then
+        return true
+      end
+    end
+    return false
+  end
 
   before_each(function()
     package.loaded["activity_watch.health"] = nil
+    package.loaded["activity_watch"] = nil
+    stub_health()
     health = require("activity_watch.health")
   end)
 
   it("exports check function", function()
     assert.is_function(health.check)
+  end)
+
+  it("warns when the plugin has not been initialized", function()
+    health.check()
+
+    assert.is_true(has_message("start", "activity-watch.nvim"))
+    assert.is_true(has_message("warn", "Plugin not initialized"))
+  end)
+
+  it("reports connected plugin state", function()
+    local aw = require("activity_watch")
+    aw._client = {
+      connected = true,
+      bucket_name = "test-bucket",
+    }
+    aw._enabled = true
+    aw._project = "test-project"
+    aw._branch = "main"
+
+    health.check()
+
+    assert.is_true(has_message("ok", "Connected to ActivityWatch server"))
+    assert.is_true(has_message("info", "  Bucket: test-bucket"))
+    assert.is_true(has_message("info", "  Project: test-project"))
+    assert.is_true(has_message("info", "  Branch: main"))
   end)
 end)
