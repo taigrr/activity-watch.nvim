@@ -174,15 +174,16 @@ Add in `health.lua:check()` using `vim.health.ok/warn/error/info`.
 
 Automated checks:
 
-```sh
-make check
+```bash
 make test
+make check
 ```
 
-Clean-home test invocation:
+`make test` runs the Plenary busted suite under `tests/`. If local Neovim config
+noise appears before the suite starts, use the explicit minimal init invocation:
 
-```sh
-nvim --headless -u tests/minimal_init.lua -c "PlenaryBustedDirectory tests/"
+```bash
+nvim --headless -u tests/minimal_init.lua -c "PlenaryBustedDirectory tests/ { minimal_init = 'tests/minimal_init.lua' }"
 ```
 
 Manual smoke testing:
