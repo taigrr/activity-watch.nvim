@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lua checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+
+      - name: Install StyLua
+        uses: JohnnyMorganz/stylua-action@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: 2.5.2
+          args: false
+
+      - name: Install Plenary
+        run: |
+          mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/nvim/lazy"
+          git clone --depth 1 https://github.com/nvim-lua/plenary.nvim \
+            "${XDG_DATA_HOME:-$HOME/.local/share}/nvim/lazy/plenary.nvim"
+
+      - name: Check formatting
+        run: make check
+
+      - name: Run tests
+        run: nvim --headless -u tests/minimal_init.lua -c "PlenaryBustedDirectory tests/"

@@ -98,6 +98,7 @@ Data sent: `{ file, project, branch, language }`
 | Command | Description |
 |---------|-------------|
 | `:AWStart` | Create bucket / reconnect |
+| `:AWStop` | Pause tracking until `:AWStart` |
 | `:AWStatus` | Show connection status |
 | `:AWHeartbeat` | Manual heartbeat |
 | `:checkhealth activity_watch` | Health check |
@@ -109,8 +110,9 @@ Main module (`require("activity_watch")`):
 - `setup(opts)` - Initialize with config
 - `heartbeat()` - Send heartbeat event
 - `start()` - Create bucket / reconnect
+- `stop()` - Pause heartbeat tracking
 - `is_connected()` - Returns boolean
-- `status()` - Returns "connected"/"disconnected"/"not initialized"
+- `status()` - Returns "connected"/"disconnected"/"paused"/"not initialized"
 
 Client module (`require("activity_watch.client")`):
 

@@ -58,6 +58,16 @@ describe("activity_watch", function()
 
       assert.equals(5601, aw.config.server.port)
     end)
+
+    it("resumes tracking when setup is called after stop", function()
+      aw.setup({})
+      aw.stop()
+
+      aw.setup({})
+
+      assert.is_true(aw._enabled)
+      assert.equals("disconnected", aw.status())
+    end)
   end)
 
   describe("status", function()
@@ -272,6 +282,83 @@ describe("activity_watch.client", function()
     end)
   end)
 
+  describe("create_bucket", function()
+    local function new_client()
+      return client.new({
+        hostname = "test-host",
+        bucket_name = "test-bucket",
+        host = "127.0.0.1",
+        port = 5600,
+        ssl = false,
+        pulsetime = 30,
+      })
+    end
+
+    local function stub_curl(status)
+      local original_new_pipe = vim.uv.new_pipe
+      local original_spawn = vim.uv.spawn
+
+      vim.uv.new_pipe = function()
+        return {
+          read_start = function(_, cb)
+            cb(nil, tostring(status))
+          end,
+          is_closing = function()
+            return false
+          end,
+          close = function() end,
+        }
+      end
+
+      vim.uv.spawn = function(cmd, opts, on_exit)
+        if cmd == "curl" then
+          vim.schedule(function()
+            on_exit(0)
+          end)
+          return {
+            is_closing = function()
+              return false
+            end,
+            close = function() end,
+          }
+        end
+        return original_spawn(cmd, opts, on_exit)
+      end
+
+      return function()
+        vim.uv.new_pipe = original_new_pipe
+        vim.uv.spawn = original_spawn
+      end
+    end
+
+    it("marks client connected for successful HTTP responses", function()
+      local c = new_client()
+      local restore = stub_curl(201)
+
+      client.create_bucket(c)
+      vim.wait(100, function()
+        return c.connected
+      end)
+
+      assert.is_true(c.connected)
+      restore()
+    end)
+
+    it("keeps client disconnected for failed HTTP responses", function()
+      local c = new_client()
+      c.connected = true
+      local restore = stub_curl(500)
+
+      client.create_bucket(c)
+      vim.wait(100, function()
+        return not c.connected
+      end)
+
+      assert.is_false(c.connected)
+      restore()
+    end)
+  end)
+
   describe("heartbeat", function()
     it("does nothing when not connected", function()
       local c = client.new({
@@ -297,13 +384,71 @@ end)
 
 describe("activity_watch.health", function()
   local health
+  local health_messages
+
+  local function stub_health()
+    health_messages = {}
+    vim.health = {
+      start = function(message)
+        table.insert(health_messages, { level = "start", message = message })
+      end,
+      ok = function(message)
+        table.insert(health_messages, { level = "ok", message = message })
+      end,
+      warn = function(message, advice)
+        table.insert(health_messages, { level = "warn", message = message, advice = advice })
+      end,
+      error = function(message, advice)
+        table.insert(health_messages, { level = "error", message = message, advice = advice })
+      end,
+      info = function(message)
+        table.insert(health_messages, { level = "info", message = message })
+      end,
+    }
+  end
+
+  local function has_message(level, message)
+    for _, entry in ipairs(health_messages) do
+      if entry.level == level and entry.message == message then
+        return true
+      end
+    end
+    return false
+  end
 
   before_each(function()
     package.loaded["activity_watch.health"] = nil
+    package.loaded["activity_watch"] = nil
+    stub_health()
     health = require("activity_watch.health")
   end)
 
   it("exports check function", function()
     assert.is_function(health.check)
+  end)
+
+  it("warns when the plugin has not been initialized", function()
+    health.check()
+
+    assert.is_true(has_message("start", "activity-watch.nvim"))
+    assert.is_true(has_message("warn", "Plugin not initialized"))
+  end)
+
+  it("reports connected plugin state", function()
+    local aw = require("activity_watch")
+    aw._client = {
+      connected = true,
+      bucket_name = "test-bucket",
+    }
+    aw._enabled = true
+    aw._project = "test-project"
+    aw._branch = "main"
+
+    health.check()
+
+    assert.is_true(has_message("ok", "Connected to ActivityWatch server"))
+    assert.is_true(has_message("info", "  Bucket: test-bucket"))
+    assert.is_true(has_message("info", "  Project: test-project"))
+    assert.is_true(has_message("info", "  Branch: main"))
   end)
 end)

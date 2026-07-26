@@ -69,6 +69,14 @@ require("activity_watch").setup({
 
 Run `:checkhealth activity_watch` to verify setup.
 
+## Development
+
+Run tests with the repo's minimal init so personal Neovim config does not affect the suite:
+
+```bash
+make test
+```
+
 ## License
 
 0BSD
