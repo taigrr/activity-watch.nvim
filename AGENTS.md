@@ -98,6 +98,7 @@ Data sent: `{ file, project, branch, language }`
 | Command | Description |
 |---------|-------------|
 | `:AWStart` | Create bucket / reconnect |
+| `:AWStop` | Pause tracking until `:AWStart` |
 | `:AWStatus` | Show connection status |
 | `:AWHeartbeat` | Manual heartbeat |
 | `:checkhealth activity_watch` | Health check |
@@ -109,8 +110,9 @@ Main module (`require("activity_watch")`):
 - `setup(opts)` - Initialize with config
 - `heartbeat()` - Send heartbeat event
 - `start()` - Create bucket / reconnect
+- `stop()` - Pause heartbeat tracking
 - `is_connected()` - Returns boolean
-- `status()` - Returns "connected"/"disconnected"/"not initialized"
+- `status()` - Returns "connected"/"disconnected"/"paused"/"not initialized"
 
 Client module (`require("activity_watch.client")`):
 
@@ -170,7 +172,20 @@ Add in `health.lua:check()` using `vim.health.ok/warn/error/info`.
 
 ## Testing
 
-Manual testing:
+Automated checks:
+
+```sh
+make check
+make test
+```
+
+Clean-home test invocation:
+
+```sh
+nvim --headless -u tests/minimal_init.lua -c "PlenaryBustedDirectory tests/"
+```
+
+Manual smoke testing:
 
 ```lua
 -- In Neovim with ActivityWatch running:
@@ -179,5 +194,3 @@ require("activity_watch").setup({})
 :AWStatus                      -- Should show "connected"
 :checkhealth activity_watch    -- Verify setup
 ```
-
-No automated test suite currently.
