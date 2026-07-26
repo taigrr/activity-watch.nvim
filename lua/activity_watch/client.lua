@@ -73,12 +73,16 @@ local function post(client, url, data)
   }
 
   local stdout = vim.uv.new_pipe()
+  local saw_status = false
+  client.connected = false
 
   local handle, err = vim.uv.spawn("curl", {
     args = args,
     stdio = { nil, stdout, nil },
   }, function(code)
-    client.connected = code == 0
+    if code ~= 0 or not saw_status then
+      client.connected = false
+    end
 
     if stdout and not stdout:is_closing() then
       stdout:close()
@@ -96,7 +100,8 @@ local function post(client, url, data)
   stdout:read_start(function(read_err, chunk)
     if not read_err and chunk then
       local status = tonumber(chunk:match("%d+"))
-      client.connected = status and status >= 200 and status < 300
+      saw_status = status ~= nil
+      client.connected = saw_status and status >= 200 and status < 300
     end
   end)
 end
