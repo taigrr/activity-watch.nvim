@@ -76,7 +76,8 @@ local function post(client, url, data)
   local saw_status = false
   client.connected = false
 
-  local handle, err = vim.uv.spawn("curl", {
+  local handle
+  handle = vim.uv.spawn("curl", {
     args = args,
     stdio = { nil, stdout, nil },
   }, function(code)
@@ -86,6 +87,9 @@ local function post(client, url, data)
 
     if stdout and not stdout:is_closing() then
       stdout:close()
+    end
+    if handle and not handle:is_closing() then
+      handle:close()
     end
   end)
 
