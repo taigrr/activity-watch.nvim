@@ -95,13 +95,17 @@ local function update_branch(git_root)
   end
 
   local stdout = vim.uv.new_pipe()
-  local handle, err = vim.uv.spawn("git", {
+  local handle
+  handle = vim.uv.spawn("git", {
     args = { "rev-parse", "--abbrev-ref", "HEAD" },
     cwd = git_root,
     stdio = { nil, stdout, nil },
   }, function(code)
     if stdout and not stdout:is_closing() then
       stdout:close()
+    end
+    if handle and not handle:is_closing() then
+      handle:close()
     end
   end)
 

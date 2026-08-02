@@ -120,6 +120,7 @@ describe("activity_watch", function()
       local repo_root = temp_root .. "/worktree-repo"
       local file_path = repo_root .. "/lua/example.lua"
       local spawn_cwds = {}
+      local git_handle_closed = false
 
       vim.fn.mkdir(repo_root .. "/lua", "p")
       vim.fn.writefile({ "gitdir: /tmp/fake-worktree" }, repo_root .. "/.git")
@@ -143,13 +144,17 @@ describe("activity_watch", function()
         if cmd == "git" then
           table.insert(spawn_cwds, opts.cwd)
           if on_exit then
-            on_exit(0)
+            vim.schedule(function()
+              on_exit(0)
+            end)
           end
           return {
             is_closing = function()
-              return false
+              return git_handle_closed
             end,
-            close = function() end,
+            close = function()
+              git_handle_closed = true
+            end,
           }
         end
         return original_spawn(cmd, opts, on_exit)
@@ -163,6 +168,7 @@ describe("activity_watch", function()
       assert.are.same({ repo_root }, spawn_cwds)
       assert.equals("worktree-repo", aw._project)
       assert.equals("feature/test", aw._branch)
+      assert.is_true(git_handle_closed)
 
       vim.uv.spawn = original_spawn
       vim.uv.new_pipe = original_new_pipe
@@ -297,6 +303,10 @@ describe("activity_watch.client", function()
     local function stub_curl(status)
       local original_new_pipe = vim.uv.new_pipe
       local original_spawn = vim.uv.spawn
+      local handles = {
+        stdout_closed = false,
+        process_closed = false,
+      }
 
       vim.uv.new_pipe = function()
         return {
@@ -304,9 +314,11 @@ describe("activity_watch.client", function()
             cb(nil, tostring(status))
           end,
           is_closing = function()
-            return false
+            return handles.stdout_closed
           end,
-          close = function() end,
+          close = function()
+            handles.stdout_closed = true
+          end,
         }
       end
 
@@ -317,44 +329,51 @@ describe("activity_watch.client", function()
           end)
           return {
             is_closing = function()
-              return false
+              return handles.process_closed
             end,
-            close = function() end,
+            close = function()
+              handles.process_closed = true
+            end,
           }
         end
         return original_spawn(cmd, opts, on_exit)
       end
 
-      return function()
-        vim.uv.new_pipe = original_new_pipe
-        vim.uv.spawn = original_spawn
-      end
+      return handles,
+        function()
+          vim.uv.new_pipe = original_new_pipe
+          vim.uv.spawn = original_spawn
+        end
     end
 
     it("marks client connected for successful HTTP responses", function()
       local c = new_client()
-      local restore = stub_curl(201)
+      local handles, restore = stub_curl(201)
 
       client.create_bucket(c)
       vim.wait(100, function()
-        return c.connected
+        return c.connected and handles.process_closed
       end)
 
       assert.is_true(c.connected)
+      assert.is_true(handles.stdout_closed)
+      assert.is_true(handles.process_closed)
       restore()
     end)
 
     it("keeps client disconnected for failed HTTP responses", function()
       local c = new_client()
       c.connected = true
-      local restore = stub_curl(500)
+      local handles, restore = stub_curl(500)
 
       client.create_bucket(c)
       vim.wait(100, function()
-        return not c.connected
+        return not c.connected and handles.process_closed
       end)
 
       assert.is_false(c.connected)
+      assert.is_true(handles.stdout_closed)
+      assert.is_true(handles.process_closed)
       restore()
     end)
   end)
