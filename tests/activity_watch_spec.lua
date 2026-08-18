@@ -59,6 +59,22 @@ describe("activity_watch", function()
       assert.equals(5601, aw.config.server.port)
     end)
 
+    it("does not reuse old options on later setup calls", function()
+      aw.setup({
+        server = {
+          host = "activitywatch.local",
+          port = 5601,
+          ssl = true,
+        },
+      })
+
+      aw.setup({})
+
+      assert.equals("127.0.0.1", aw.config.server.host)
+      assert.equals(5600, aw.config.server.port)
+      assert.equals(false, aw.config.server.ssl)
+    end)
+
     it("resumes tracking when setup is called after stop", function()
       aw.setup({})
       aw.stop()
