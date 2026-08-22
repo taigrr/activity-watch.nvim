@@ -25,7 +25,7 @@ local M = {}
 ---@field server? AWServerConfig Server configuration
 
 ---@type AWConfig
-M.config = {
+local DEFAULT_CONFIG = {
   bucket = {
     hostname = nil,
     name = nil,
@@ -37,6 +37,9 @@ M.config = {
     pulsetime = 30,
   },
 }
+
+---@type AWConfig
+M.config = vim.deepcopy(DEFAULT_CONFIG)
 
 ---@type table?
 M._client = nil
@@ -270,7 +273,7 @@ end
 ---Initialize the plugin.
 ---@param opts? AWConfig
 function M.setup(opts)
-  M.config = vim.tbl_deep_extend("force", M.config, opts or {})
+  M.config = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULT_CONFIG), opts or {})
   M._enabled = true
 
   -- Resolve hostname
