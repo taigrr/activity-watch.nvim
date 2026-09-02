@@ -254,6 +254,73 @@ end)
 describe("activity_watch.client", function()
   local client
 
+  local function new_client()
+    return client.new({
+      hostname = "test-host",
+      bucket_name = "test-bucket",
+      host = "127.0.0.1",
+      port = 5600,
+      ssl = false,
+      pulsetime = 30,
+    })
+  end
+
+  local function stub_curl(status)
+    local original_new_pipe = vim.uv.new_pipe
+    local original_spawn = vim.uv.spawn
+    local call = {
+      args = nil,
+      stdout_closed = false,
+      process_closed = false,
+    }
+
+    vim.uv.new_pipe = function()
+      return {
+        read_start = function(_, cb)
+          cb(nil, tostring(status))
+        end,
+        is_closing = function()
+          return call.stdout_closed
+        end,
+        close = function()
+          call.stdout_closed = true
+        end,
+      }
+    end
+
+    vim.uv.spawn = function(cmd, opts, on_exit)
+      if cmd == "curl" then
+        call.args = opts.args
+        vim.schedule(function()
+          on_exit(0)
+        end)
+        return {
+          is_closing = function()
+            return call.process_closed
+          end,
+          close = function()
+            call.process_closed = true
+          end,
+        }
+      end
+      return original_spawn(cmd, opts, on_exit)
+    end
+
+    return call, function()
+      vim.uv.new_pipe = original_new_pipe
+      vim.uv.spawn = original_spawn
+    end
+  end
+
+  local function curl_arg(args, name)
+    for index, arg in ipairs(args) do
+      if arg == name then
+        return args[index + 1]
+      end
+    end
+    return nil
+  end
+
   before_each(function()
     package.loaded["activity_watch.client"] = nil
     client = require("activity_watch.client")
@@ -305,91 +372,34 @@ describe("activity_watch.client", function()
   end)
 
   describe("create_bucket", function()
-    local function new_client()
-      return client.new({
-        hostname = "test-host",
-        bucket_name = "test-bucket",
-        host = "127.0.0.1",
-        port = 5600,
-        ssl = false,
-        pulsetime = 30,
-      })
-    end
-
-    local function stub_curl(status)
-      local original_new_pipe = vim.uv.new_pipe
-      local original_spawn = vim.uv.spawn
-      local handles = {
-        stdout_closed = false,
-        process_closed = false,
-      }
-
-      vim.uv.new_pipe = function()
-        return {
-          read_start = function(_, cb)
-            cb(nil, tostring(status))
-          end,
-          is_closing = function()
-            return handles.stdout_closed
-          end,
-          close = function()
-            handles.stdout_closed = true
-          end,
-        }
-      end
-
-      vim.uv.spawn = function(cmd, opts, on_exit)
-        if cmd == "curl" then
-          vim.schedule(function()
-            on_exit(0)
-          end)
-          return {
-            is_closing = function()
-              return handles.process_closed
-            end,
-            close = function()
-              handles.process_closed = true
-            end,
-          }
-        end
-        return original_spawn(cmd, opts, on_exit)
-      end
-
-      return handles,
-        function()
-          vim.uv.new_pipe = original_new_pipe
-          vim.uv.spawn = original_spawn
-        end
-    end
-
     it("marks client connected for successful HTTP responses", function()
       local c = new_client()
-      local handles, restore = stub_curl(201)
+      local call, restore = stub_curl(201)
 
       client.create_bucket(c)
       vim.wait(100, function()
-        return c.connected and handles.process_closed
+        return c.connected and call.process_closed
       end)
 
       assert.is_true(c.connected)
-      assert.is_true(handles.stdout_closed)
-      assert.is_true(handles.process_closed)
+      assert.is_true(call.stdout_closed)
+      assert.is_true(call.process_closed)
       restore()
     end)
 
     it("keeps client disconnected for failed HTTP responses", function()
       local c = new_client()
       c.connected = true
-      local handles, restore = stub_curl(500)
+      local call, restore = stub_curl(500)
 
       client.create_bucket(c)
       vim.wait(100, function()
-        return not c.connected and handles.process_closed
+        return not c.connected and call.process_closed
       end)
 
       assert.is_false(c.connected)
-      assert.is_true(handles.stdout_closed)
-      assert.is_true(handles.process_closed)
+      assert.is_true(call.stdout_closed)
+      assert.is_true(call.process_closed)
       restore()
     end)
   end)
@@ -413,6 +423,34 @@ describe("activity_watch.client", function()
           language = "lua",
         })
       end)
+    end)
+
+    it("posts activity data to the heartbeat endpoint when connected", function()
+      local c = new_client()
+      c.connected = true
+      local call, restore = stub_curl(202)
+
+      client.heartbeat(c, {
+        file = "/tmp/test.lua",
+        project = "test",
+        branch = "main",
+        language = "lua",
+      })
+      vim.wait(100, function()
+        return call.process_closed
+      end)
+
+      local body = vim.fn.json_decode(curl_arg(call.args, "--data-raw"))
+
+      assert.equals(c.heartbeat_url, call.args[2])
+      assert.equals("/tmp/test.lua", body.data.file)
+      assert.equals("test", body.data.project)
+      assert.equals("main", body.data.branch)
+      assert.equals("lua", body.data.language)
+      assert.is_true(c.connected)
+      assert.is_true(call.stdout_closed)
+      assert.is_true(call.process_closed)
+      restore()
     end)
   end)
 end)
