@@ -220,6 +220,61 @@ describe("activity_watch", function()
       vim.uv.spawn = original_spawn
       client.create_bucket = original_create_bucket
     end)
+
+    it("clears branch when git reports a detached HEAD", function()
+      local client = require("activity_watch.client")
+      local original_create_bucket = client.create_bucket
+      local original_spawn = vim.uv.spawn
+      local original_new_pipe = vim.uv.new_pipe
+      local temp_root = vim.fn.tempname()
+      local repo_root = temp_root .. "/detached-repo"
+      local file_path = repo_root .. "/lua/example.lua"
+
+      vim.fn.mkdir(repo_root .. "/lua", "p")
+      vim.fn.writefile({ "ref: refs/heads/main" }, repo_root .. "/.git")
+      vim.fn.writefile({ "print('hi')" }, file_path)
+      vim.cmd.edit(file_path)
+
+      client.create_bucket = function(_) end
+      vim.uv.new_pipe = function()
+        return {
+          read_start = function(_, cb)
+            cb(nil, "HEAD\n")
+            cb(nil, nil)
+          end,
+          is_closing = function()
+            return false
+          end,
+          close = function() end,
+        }
+      end
+      vim.uv.spawn = function(cmd, opts, on_exit)
+        if cmd == "git" then
+          vim.schedule(function()
+            on_exit(1)
+          end)
+          return {
+            is_closing = function()
+              return false
+            end,
+            close = function() end,
+          }
+        end
+        return original_spawn(cmd, opts, on_exit)
+      end
+
+      aw.setup({})
+      vim.wait(100, function()
+        return aw._project == "detached-repo"
+      end)
+
+      assert.equals("detached-repo", aw._project)
+      assert.is_nil(aw._branch)
+
+      vim.uv.spawn = original_spawn
+      vim.uv.new_pipe = original_new_pipe
+      client.create_bucket = original_create_bucket
+    end)
   end)
 
   describe("heartbeat", function()

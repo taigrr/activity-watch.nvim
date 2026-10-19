@@ -100,7 +100,7 @@ local function update_branch(git_root)
   local stdout = vim.uv.new_pipe()
   local handle
   handle = vim.uv.spawn("git", {
-    args = { "rev-parse", "--abbrev-ref", "HEAD" },
+    args = { "symbolic-ref", "--short", "HEAD" },
     cwd = git_root,
     stdio = { nil, stdout, nil },
   }, function(code)
@@ -127,7 +127,7 @@ local function update_branch(git_root)
     else
       local branch = output:gsub("%s+$", "")
       vim.schedule(function()
-        M._branch = (branch ~= "" and not branch:match("^fatal")) and branch or nil
+        M._branch = (branch ~= "" and branch ~= "HEAD" and not branch:match("^fatal")) and branch or nil
       end)
     end
   end)
