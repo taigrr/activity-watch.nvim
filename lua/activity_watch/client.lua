@@ -55,6 +55,7 @@ end
 local function post(client, url, data)
   local body = vim.fn.json_encode(data)
   local args = {
+    "-X",
     "POST",
     url,
     "-H",
