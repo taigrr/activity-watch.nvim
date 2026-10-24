@@ -497,7 +497,8 @@ describe("activity_watch.client", function()
 
       local body = vim.fn.json_decode(curl_arg(call.args, "--data-raw"))
 
-      assert.equals(c.heartbeat_url, call.args[2])
+      assert.equals("POST", curl_arg(call.args, "-X"))
+      assert.is_true(vim.tbl_contains(call.args, c.heartbeat_url))
       assert.equals("/tmp/test.lua", body.data.file)
       assert.equals("test", body.data.project)
       assert.equals("main", body.data.branch)
