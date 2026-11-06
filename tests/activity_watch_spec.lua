@@ -320,7 +320,8 @@ describe("activity_watch.client", function()
     })
   end
 
-  local function stub_curl(status)
+  local function stub_curl(status, behavior)
+    behavior = behavior or {}
     local original_new_pipe = vim.uv.new_pipe
     local original_spawn = vim.uv.spawn
     local call = {
@@ -332,7 +333,9 @@ describe("activity_watch.client", function()
     vim.uv.new_pipe = function()
       return {
         read_start = function(_, cb)
-          cb(nil, tostring(status))
+          if status ~= nil then
+            cb(nil, tostring(status))
+          end
         end,
         is_closing = function()
           return call.stdout_closed
@@ -346,8 +349,11 @@ describe("activity_watch.client", function()
     vim.uv.spawn = function(cmd, opts, on_exit)
       if cmd == "curl" then
         call.args = opts.args
+        if behavior.spawn_failure then
+          return nil, "ENOENT"
+        end
         vim.schedule(function()
-          on_exit(0)
+          on_exit(behavior.exit_code or 0)
         end)
         return {
           is_closing = function()
@@ -427,6 +433,51 @@ describe("activity_watch.client", function()
   end)
 
   describe("create_bucket", function()
+    it("disconnects and closes handles when curl exits unsuccessfully after a 2xx status", function()
+      local c = new_client()
+      local call, restore = stub_curl(201, { exit_code = 28 })
+
+      client.create_bucket(c)
+      vim.wait(100, function()
+        return call.process_closed
+      end)
+      restore()
+
+      assert.is_false(c.connected)
+      assert.is_true(call.stdout_closed)
+      assert.is_true(call.process_closed)
+    end)
+
+    it("disconnects and closes handles when curl produces no status", function()
+      local c = new_client()
+      c.connected = true
+      local call, restore = stub_curl(nil)
+
+      client.create_bucket(c)
+      vim.wait(100, function()
+        return call.process_closed
+      end)
+      restore()
+
+      assert.is_false(c.connected)
+      assert.is_true(call.stdout_closed)
+      assert.is_true(call.process_closed)
+    end)
+
+    it("disconnects and closes the pipe when curl cannot spawn", function()
+      local c = new_client()
+      c.connected = true
+      local call, restore = stub_curl(nil, { spawn_failure = true })
+
+      local ok, err = pcall(client.create_bucket, c)
+      restore()
+
+      assert.is_true(ok, tostring(err))
+      assert.is_false(c.connected)
+      assert.is_true(call.stdout_closed)
+      assert.is_false(call.process_closed)
+    end)
+
     it("marks client connected for successful HTTP responses", function()
       local c = new_client()
       local call, restore = stub_curl(201)
