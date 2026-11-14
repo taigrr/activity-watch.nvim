@@ -333,7 +333,11 @@ describe("activity_watch.client", function()
     vim.uv.new_pipe = function()
       return {
         read_start = function(_, cb)
-          if status ~= nil then
+          if behavior.chunks then
+            for _, chunk in ipairs(behavior.chunks) do
+              cb(nil, chunk)
+            end
+          elseif status ~= nil then
             cb(nil, tostring(status))
           end
         end,
@@ -476,6 +480,23 @@ describe("activity_watch.client", function()
       assert.is_false(c.connected)
       assert.is_true(call.stdout_closed)
       assert.is_false(call.process_closed)
+    end)
+
+    it("recognizes successful status codes split across pipe reads", function()
+      for _, chunks in ipairs({ { "2", "00" }, { "20", "1" }, { "2", "0", "2" } }) do
+        local c = new_client()
+        local call, restore = stub_curl(nil, { chunks = chunks })
+
+        client.create_bucket(c)
+        vim.wait(100, function()
+          return call.process_closed
+        end)
+        restore()
+
+        assert.is_true(c.connected)
+        assert.is_true(call.stdout_closed)
+        assert.is_true(call.process_closed)
+      end
     end)
 
     it("marks client connected for successful HTTP responses", function()

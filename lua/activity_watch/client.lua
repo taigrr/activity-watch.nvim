@@ -75,6 +75,7 @@ local function post(client, url, data)
 
   local stdout = vim.uv.new_pipe()
   local saw_status = false
+  local status_output = ""
   client.connected = false
 
   local handle
@@ -104,7 +105,8 @@ local function post(client, url, data)
 
   stdout:read_start(function(read_err, chunk)
     if not read_err and chunk then
-      local status = tonumber(chunk:match("%d+"))
+      status_output = status_output .. chunk
+      local status = tonumber(status_output:match("^(%d%d%d)$"))
       saw_status = status ~= nil
       client.connected = saw_status and status >= 200 and status < 300
     end
