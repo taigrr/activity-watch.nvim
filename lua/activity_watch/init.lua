@@ -57,6 +57,7 @@ M._last_heartbeat = 0
 M._enabled = true
 
 local HEARTBEAT_INTERVAL_MS = 8000
+local branch_lookup_generation = 0
 
 ---@private
 ---Find git root directory from current buffer
@@ -92,8 +93,10 @@ end
 ---Update cached branch name (async)
 ---@param git_root string?
 local function update_branch(git_root)
+  branch_lookup_generation = branch_lookup_generation + 1
+  local generation = branch_lookup_generation
+  M._branch = nil
   if not git_root then
-    M._branch = nil
     return
   end
 
@@ -127,6 +130,9 @@ local function update_branch(git_root)
     else
       local branch = output:gsub("%s+$", "")
       vim.schedule(function()
+        if generation ~= branch_lookup_generation then
+          return
+        end
         M._branch = (branch ~= "" and branch ~= "HEAD" and not branch:match("^fatal")) and branch or nil
       end)
     end
